@@ -22,11 +22,11 @@ def ping():
     return "pong", 200
 
 def run_server():
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0", port=5000)
 
 def self_ping():
     """Hace ping a sí mismo cada 4 minutos para evitar el sleep de Replit."""
-    url = os.environ.get("REPLIT_URL", "http://localhost:8080") + "/ping"
+    url = os.environ.get("REPLIT_URL", "http://localhost:5000") + "/ping"
     time.sleep(30)  # Espera inicial para que el servidor arranque
     while True:
         try:
