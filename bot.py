@@ -10,6 +10,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
     ContextTypes,
+    CallbackQueryHandler, 
 )
 
 logging.basicConfig(
@@ -22,6 +23,36 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 MAX_RESULTS = 2
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plazas.db')
 
+TEXTS = {
+    'es': {
+        'searching': "🔍 Buscando plazas cercanas...",
+        'parking_spaces': "♿ Plazas reservadas: {plazas_n}",
+        'distance': "➡️ A {dist} m · {fuente}",
+        'not_found': "😔 No encontré plazas en un radio de 2 km.\n\nPuede que no estén mapeadas aún. Añade una nueva plaza con /newparking",
+        'found': "♿ *{n} plaza(s) encontrada(s) en {radio}*",
+        'directions': "🧭 Cómo llegar a Plaza {i}",
+        'send_location': "📍 Envíame tu *ubicación* para buscar plazas cercanas.\nPulsa el clip 📎 → Ubicación.",
+        'help_1': "1️⃣ Pulsa el clip 📎 → *Ubicación*",
+        'help_2': "2️⃣ Busca en 500 m, amplía a 2 km si no hay resultados",
+        'help_3': "3️⃣ Navega a cada plaza con Google Maps",
+        'nueva_plaza_prompt': "📍 Envía la ubicación exacta de la plaza y la añadiremos.",
+        'nueva_plaza_ok': "✅ Plaza enviada. ¡Gracias!",
+    },
+    'en': {
+        'searching': "🔍 Searching for nearby spaces...",
+        'parking_spaces': "♿ Parking spaces: {plazas_n}",
+        'distance': "➡️ {dist} m away · {fuente}",
+        'not_found': "😔 No disabled parking spaces found within 2 km.\n\nThey may not be mapped yet. Send a new parking space with /newparking",
+        'found': "♿ *{n} park(s) found within {radio}*",
+        'directions': "🧭 Directions to Parking {i}",
+        'send_location': "📍 Send me your *location* to find nearby spaces.\nTap the clip 📎 → Location.",
+        'help_1': "1️⃣ Tap the clip 📎 → *Location*",
+        'help_2': "2️⃣ Searches within 500 m, expands to 2 km if nothing found",
+        'help_3': "3️⃣ Navigate to each space with Google Maps",
+        'nueva_plaza_prompt': "📍 Send the exact location of the parking space and we'll add it.",
+        'nueva_plaza_ok': "✅ Parking space submitted. Thank you!",
+    }
+}
 
 # ─── Utilidades ────────────────────────────────────────────────────────────
 
@@ -120,7 +151,7 @@ def search_plazas(lat: float, lon: float):
 
 # ─── Formato ───────────────────────────────────────────────────────────────
 
-def format_result(plaza: dict, idx: int) -> str:
+def format_result(plaza: dict, idx: int, lang: str) -> str:
     tags = plaza.get('tags', {})
     dist = int(plaza['_dist'])
     fuente = plaza.get('fuente', 'OpenStreetMap')
@@ -133,22 +164,39 @@ def format_result(plaza: dict, idx: int) -> str:
     if direccion:
         lineas.append(f"🏠 {direccion}")
     if plazas_n:
-        lineas.append(f"♿ Plazas reservadas: {plazas_n}")
-    lineas.append(f"➡️ A {dist} m · {fuente}")
+        lineas.append(TEXTS[lang]['parking_spaces'].format(plazas_n=plazas_n))
+    
+    lineas.append(TEXTS[lang]['distance'].format(fuente=fuente))
+    
     return "\n".join(lineas)
 
 
 # ─── Handlers ──────────────────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[
+        InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es"),
+        InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
+    ]]
     await update.message.reply_text(
-        "♿ *Bot de Aparcamiento para Discapacitados*\n\n"
-        "Envíame tu 📍 *ubicación* y te mostraré las plazas más cercanas.\n\n"
-        "Usa /ayuda para más información.",
-        parse_mode="Markdown"
+        "♿ *AccessibleParkBot*\n\n"
+        "🇪🇸 Envíame tu 📍 ubicación para encontrar plazas PMR cercanas.\n"
+        "🇬🇧 Send me your 📍 location to find nearby disabled parking spaces.\n\n"
+        "🌍 Select language / Selecciona idioma:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-
+async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    lang = query.data.split("_")[1]
+    context.user_data['lang'] = lang
+    if lang == 'en':
+        await query.edit_message_text("🇬🇧 Language set to English. Send me your 📍 location!")
+    else:
+        await query.edit_message_text("🇪🇸 Idioma establecido en español. ¡Envíame tu 📍 ubicación!")
+        
 async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ciudades = ""
     if os.path.exists(DB_PATH):
@@ -157,23 +205,14 @@ async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.close()
         ciudades = "\n".join(f"  • {c} ({n} plazas)" for c, n in rows)
 
-    await update.message.reply_text(
-        "ℹ️ *Cómo usar el bot:*\n\n"
-        "1️⃣ Pulsa el clip 📎 → *Ubicación*\n"
-        "2️⃣ Busca en 500 m, amplía a 2 km si no hay resultados\n"
-        "3️⃣ Navega a cada plaza con Google Maps\n\n"
-        "📊 *Fuentes de datos:*\n"
-        "• OpenStreetMap\n"
-        "• Datos oficiales de ayuntamientos en datos.gob.es\n"
-        "/start — Inicio\n"
-        "/ayuda — Ayuda\n"
-        "/nuevaplaza — Registra una nueva plaza",
-        parse_mode="Markdown"
-    )
+    lang = context.user_data.get('lang', 'es')
+    texto = f"{TEXTS[lang]['help_1']}\n{TEXTS[lang]['help_2']}\n{TEXTS[lang]['help_3']}"
+    await update.message.reply_text(texto, parse_mode="Markdown")
 
 async def nueva_plaza(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = context.user_data.get('lang', 'es')
     await update.message.reply_text(
-        "📍 Envíame la *ubicación exacta* de la plaza y la añadiremos para revisión.",
+        TEXTS[lang]['nueva_plaza_prompt'],
         parse_mode="Markdown"
     )
     context.user_data['esperando_nueva_plaza'] = True
@@ -182,6 +221,8 @@ async def nueva_plaza(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lat = update.message.location.latitude
     user_lon = update.message.location.longitude
+    
+    lang = context.user_data.get('lang', 'es')
 
     if context.user_data.get('esperando_nueva_plaza'):
         context.user_data['esperando_nueva_plaza'] = False
@@ -192,31 +233,30 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         conn.commit()
         conn.close()
-        await update.message.reply_text("✅ Plaza enviada, la revisaremos pronto. ¡Gracias!")
+        await update.message.reply_text(TEXTS[lang]['nueva_plaza_ok'])
         return
     
-    msg = await update.message.reply_text("🔍 Buscando plazas cercanas...")
+    msg = await update.message.reply_text(TEXTS[lang]['searching'])
 
     plazas, radio = search_plazas(user_lat, user_lon)
 
     if not plazas:
         await msg.edit_text(
-            "😔 No encontré plazas en un radio de 2 km.\n\n"
-            "Puede que no estén mapeadas aún. Puedes contribuir en openstreetmap.org"
+            TEXTS[lang]['not_found']
         )
         return
 
     radio_txt = "500 m" if radio == 500 else "2 km"
     top2 = plazas[:2]
-
-    texto = f"♿ *{len(plazas)} plaza(s) encontrada(s) en {radio_txt}*\n\n"
-    texto += "\n\n".join(format_result(p, i+1) for i, p in enumerate(top2))
+    
+    texto = TEXTS[lang]['found'].format(n=len(plazas), radio=radio_txt) + "\n\n"
+    texto += "\n\n".join(format_result(p, i+1, lang) for i, p in enumerate(top2))
 
     keyboard = []
     for i, plaza in enumerate(top2, 1):
         lat, lon = plaza['lat'], plaza['lon']
         keyboard.append([
-            InlineKeyboardButton(f"🧭 Cómo llegar a Plaza {i}", url=f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}&travelmode=driving"),
+            InlineKeyboardButton(TEXTS[lang]['directions'].format(i=i), url=f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}&travelmode=driving"),
         ])
 
     await msg.edit_text(
@@ -227,9 +267,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = context.user_data.get('lang', 'es')
     await update.message.reply_text(
-        "📍 Envíame tu *ubicación* para buscar plazas cercanas.\n"
-        "Pulsa el clip 📎 → Ubicación.",
+        TEXTS[lang]['send_location'],
         parse_mode="Markdown"
     )
 
@@ -242,6 +282,7 @@ def main():
         raise ValueError("Falta la variable de entorno TELEGRAM_TOKEN")
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(set_language, pattern="^lang_"))
     app.add_handler(CommandHandler("ayuda", ayuda))
     app.add_handler(CommandHandler("nuevaplaza", nueva_plaza))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
