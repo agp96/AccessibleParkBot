@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-MAX_RESULTS = 8
+MAX_RESULTS = 2
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plazas.db')
 
 
@@ -109,7 +109,7 @@ def merge_results(osm: list, local: list) -> list:
 
 def search_plazas(lat: float, lon: float):
     """Busca en OSM + DB. Amplía a 2km si no hay resultados a 800m."""
-    for radius in (800, 2000):
+    for radius in (500, 2000):
         osm = query_overpass(lat, lon, radius)
         local = query_local_db(lat, lon, radius)
         combined = merge_results(osm, local)
@@ -124,12 +124,12 @@ def format_result(plaza: dict, idx: int) -> str:
     tags = plaza.get('tags', {})
     dist = int(plaza['_dist'])
     fuente = plaza.get('fuente', 'OpenStreetMap')
-    nombre = tags.get('name', f'Plaza PMR #{idx}')
+    nombre = tags.get('name', f'Plaza #{idx}')
     plazas_n = tags.get('capacity:disabled', '')
     direccion = tags.get('addr:street', '')
     if tags.get('addr:housenumber'):
         direccion += f" {tags['addr:housenumber']}"
-    lineas = [f"📍 *{nombre}*"]
+    lineas = [f"📍 *Plaza {idx}*"]
     if direccion:
         lineas.append(f"🏠 {direccion}")
     if plazas_n:
@@ -186,7 +186,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    radio_txt = "800 m" if radio == 800 else "2 km"
+    radio_txt = "500 m" if radio == 500 else "2 km"
     top2 = plazas[:2]
 
     texto = f"♿ *{len(plazas)} plaza(s) encontrada(s) en {radio_txt}*\n\n"
@@ -196,7 +196,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, plaza in enumerate(top2, 1):
         lat, lon = plaza['lat'], plaza['lon']
         keyboard.append([
-            InlineKeyboardButton(f"🧭 Cómo llegar a plaza {i}", url=f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}&travelmode=driving"),
+            InlineKeyboardButton(f"🧭 Cómo llegar a Plaza {i}", url=f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}&travelmode=driving"),
         ])
 
     await msg.edit_text(
