@@ -1,6 +1,6 @@
-# ♿ AccessibleParkBot
+# ♿ ParkingDisBot
 
-Telegram bot that finds nearby disabled parking spaces in real time. Available at @AccessibleParkBot
+Telegram bot that finds nearby disabled parking spaces in real time. Available at @ParkingDisBot
 
 ## How to use
 1. Send your 📍 location
