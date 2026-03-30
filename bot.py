@@ -250,7 +250,7 @@ async def new_parking(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lat = update.message.location.latitude
     user_lon = update.message.location.longitude
-    
+    logger.info(f"user_data: {context.user_data}")
     context.user_data['plaza_idx'] = 0
     
     lang = context.user_data.get("lang", "es")
